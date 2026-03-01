@@ -1,4 +1,5 @@
 from scapy.all import *
+import ipaddress
 
 
 IFACE_1 = "enp0s8"
@@ -33,7 +34,7 @@ def route(pkt):
     pkt = modify_packet(pkt)
     
     for subnet in routing_table.keys():
-        if subnet in pkt[IP].dst:
+        if ipaddress.ip_address(pkt[IP].dst) in ipaddress.ip_network(f"{subnet}.0/24"):
             # get only ingoing packets
             if pkt.sniffed_on != routing_table[subnet]:
                 sendp(pkt, routing_table[subnet])
