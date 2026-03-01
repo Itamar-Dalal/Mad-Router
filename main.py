@@ -1,36 +1,70 @@
 from scapy.all import *
 import ipaddress
+from random import randrange
 
 
-IFACE_1 = "enp0s8"
-SUBNET_1 = "192.168.1"
+# IN INTERFACE
+IFACE_IN = "enp0s8"
+SUBNET_IN = "192.168.1"
 
-IFACE_2 = "enp0s9"
-SUBNET_2 = "192.168.2"
+# OUT INTERFACE
+IFACE_OUT = "enp0s9"
+SUBNET_OUT = "192.168.2"
 
-PROXY_IP = "192.168.2.2"
-ALICE_IP = "192.168.1.1"
+# NAT
+NAT_IP = "192.168.2.2"
+
+# ROUTING TABLE
+routing_table = {} # subnet -> iface
+routing_table[SUBNET_IN] = IFACE_IN
+routing_table[SUBNET_OUT] = IFACE_OUT
+
+# NAT TABLE
+nat_table = {} # router's out port -> (client's ip, client's in port) or identifer -> ip,identifier in icmp
+
 
 routing_table = {} # subnet -> iface
-routing_table[SUBNET_1] = IFACE_1
-routing_table[SUBNET_2] = IFACE_2
+routing_table[SUBNET_IN] = IFACE_IN
+routing_table[SUBNET_OUT] = IFACE_OUT
+
+
+def generate_port() -> int:
+    port = randrange(200, 10000)
+    while port in nat_table.keys():
+        port = randrange(200, 10000)
+    return port
 
 
 def modify_packet(pkt):
-    # check if Alice is not connecting to proxy
-    # if not, then change the src ip to proxy's ip
-    if pkt.sniffed_on == IFACE_1 and pkt[IP].dst != PROXY_IP:
-        pkt[IP].src = PROXY_IP
+    
+    proto = TCP if TCP in pkt else (UDP if UDP in pkt else ICMP)
+    
+    # check if client is not connecting to the NAT
+    # if not, then change the src ip to nat's ip
+    if pkt.sniffed_on == IFACE_IN and pkt[IP].dst != NAT_IP:
+        client_addr = (pkt[IP].src, pkt[proto].sport)
 
-    # change the dst ip back to alice's ip
-    if pkt.sniffed_on == IFACE_2 and pkt[IP].dst == PROXY_IP:
-        pkt[IP].dst = ALICE_IP
+        if client_addr not in nat_table.values(): # new connection
+            out_port = generate_port()
+            nat_table[out_port] = client_addr
+        else: # use existing connection
+            out_port = [port for port, addr in nat_table.items() if addr == client_addr][0]
+    
+        pkt[IP].src = NAT_IP
+        pkt[proto].sport = out_port
+
+    # change the dst ip and port back to client's ip and port
+    if pkt.sniffed_on == IFACE_OUT and pkt[IP].dst == NAT_IP:
+        out_port = pkt[proto].dport
+
+        pkt[IP].dst = nat_table[out_port][0]
+        pkt[proto].dport = nat_table[out_port][1]
 
     return pkt
 
 
-def route(pkt):
-    # modify proxy changes before route
+def route(pkt):    
+    # modify packet before route
     pkt = modify_packet(pkt)
     
     for subnet in routing_table.keys():
@@ -41,7 +75,7 @@ def route(pkt):
 
 
 def main():
-    sniff(iface=[IFACE_1, IFACE_2], prn=route, filter="ip")
+    sniff(iface=[IFACE_IN, IFACE_OUT], prn=route, filter="tcp or udp")
 
 
 if __name__ == "__main__":
