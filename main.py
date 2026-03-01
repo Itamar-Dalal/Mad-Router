@@ -1,5 +1,6 @@
 from scapy.all import *
 
+
 IFACE_1 = "enp0s8"
 SUBNET_1 = "192.168.1"
 
@@ -7,10 +8,21 @@ IFACE_2 = "enp0s9"
 SUBNET_2 = "192.168.2"
 
 
+routing_table = {} # subnet -> iface
+routing_table[SUBNET_1] = IFACE_1
+routing_table[SUBNET_2] = IFACE_2
+
+
+def route(pkt):
+    dst_ip = pkt[IP].dst
+    for subnet in routing_table.keys():
+        if subnet in dst_ip:
+            if pkt.sniffed_on != routing_table[subnet]:
+                sendp(pkt, routing_table[subnet])
+
+
 def main():
-    while True:
-        sniff(iface=IFACE_1, prn=lambda pkt: sendp(pkt, IFACE_2), filter=f"ip dst {SUBNET_2}", count=1)
-        sniff(iface=IFACE_2, prn=lambda pkt: sendp(pkt, IFACE_1), filter=f"ip dst {SUBNET_1}", count=1)
+    sniff(iface=[IFACE_1, IFACE_2], prn=route, filter="ip")
 
 
 if __name__ == "__main__":
