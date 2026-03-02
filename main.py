@@ -2,8 +2,6 @@ from scapy.all import *
 import ipaddress
 from random import randrange
 
-# note: the current program wont fully work because I dont translate the mac addresses
-# if its part of the ex, please redo :)
 
 # IN INTERFACE
 IFACE_IN = "enp0s8"
@@ -24,17 +22,21 @@ routing_table[SUBNET_OUT] = IFACE_OUT
 # NAT TABLE
 nat_table = {} # router's out port -> (client's ip, client's in port)
 
-
-routing_table = {} # subnet -> iface
-routing_table[SUBNET_IN] = IFACE_IN
-routing_table[SUBNET_OUT] = IFACE_OUT
+PORT_START_RANGE = 200
+PORT_END_RANGE = 10000
+UDP_PORT_BLOCK = 12345
 
 
 def generate_port() -> int:
-    port = randrange(200, 10000)
+    port = randrange(PORT_START_RANGE, PORT_END_RANGE)
     while port in nat_table.keys():
-        port = randrange(200, 10000)
+        port = randrange(PORT_START_RANGE, PORT_END_RANGE)
     return port
+
+
+def firewall(pkt) -> bool:
+    """ return True if the packet is permitted, else False """
+    return (UDP not in pkt or pkt[UDP].dport != UDP_PORT_BLOCK) and True # add more rules here! (replace True)
 
 
 def modify_packet(pkt):
@@ -69,7 +71,10 @@ def modify_packet(pkt):
     return pkt
 
 
-def route(pkt):    
+def route(pkt):
+    # filter packet thorugh firewall
+    can_send_in = firewall(pkt)
+    
     # modify packet before route
     pkt = modify_packet(pkt)
     
@@ -77,7 +82,14 @@ def route(pkt):
         if ipaddress.ip_address(pkt[IP].dst) in ipaddress.ip_network(subnet):
             # get only ingoing packets
             if pkt.sniffed_on != routing_table[subnet]:
-                sendp(pkt, routing_table[subnet])
+                if not can_send_in:
+                    print("-------------- Firewall dropped to following packet --------------")
+                    pkt.show()
+                
+                else:
+                    sendp(pkt, routing_table[subnet])
+                
+                break
 
 
 def main():
