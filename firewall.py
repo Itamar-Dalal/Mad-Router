@@ -1,8 +1,8 @@
 from scapy.all import *
-import dataclasses
+from dataclasses import dataclass
 
 
-@dataclasses.dataclass
+@dataclass
 class FirewallRule:
     is_tcp: bool
     src_mac: str

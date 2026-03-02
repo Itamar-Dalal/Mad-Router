@@ -16,6 +16,7 @@ nat_table = {}  # router's out port -> (client's ip, client's in port)
 # FIREWALL RULES
 firewall = Firewall()
 firewall.add_rule(False, dst_port=12345)
+firewall.add_rule(True, dst_ip="192.168.1.49")
 
 
 def generate_port() -> int:
@@ -76,7 +77,7 @@ def route(pkt: packet) -> None:
 
     for subnet in routing_table.keys():
         if ipaddress.ip_address(pkt[IP].dst) in ipaddress.ip_network(subnet):
-            # get only ingoing packets
+            # get only ingoing packets from that interface
             if pkt.sniffed_on != routing_table[subnet]:
                 if not can_send_in:
                     print(
