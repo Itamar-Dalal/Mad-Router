@@ -2,14 +2,16 @@ from scapy.all import *
 import ipaddress
 from random import randrange
 
+# note: the current program wont fully work because I dont translate the mac addresses
+# if its part of the ex, please redo :)
 
 # IN INTERFACE
 IFACE_IN = "enp0s8"
-SUBNET_IN = "192.168.1"
+SUBNET_IN = "192.168.1.0/24"
 
 # OUT INTERFACE
 IFACE_OUT = "enp0s9"
-SUBNET_OUT = "192.168.2"
+SUBNET_OUT = "0.0.0.0/0"
 
 # NAT
 NAT_IP = "192.168.2.2"
@@ -20,7 +22,7 @@ routing_table[SUBNET_IN] = IFACE_IN
 routing_table[SUBNET_OUT] = IFACE_OUT
 
 # NAT TABLE
-nat_table = {} # router's out port -> (client's ip, client's in port) or identifer -> ip,identifier in icmp
+nat_table = {} # router's out port -> (client's ip, client's in port)
 
 
 routing_table = {} # subnet -> iface
@@ -36,8 +38,10 @@ def generate_port() -> int:
 
 
 def modify_packet(pkt):
-    
-    proto = TCP if TCP in pkt else (UDP if UDP in pkt else ICMP)
+    print("---------------before modify------------------")
+    pkt.show()
+
+    proto = TCP if TCP in pkt else UDP
     
     # check if client is not connecting to the NAT
     # if not, then change the src ip to nat's ip
@@ -60,6 +64,8 @@ def modify_packet(pkt):
         pkt[IP].dst = nat_table[out_port][0]
         pkt[proto].dport = nat_table[out_port][1]
 
+    print("---------------after modify------------------")
+    pkt.show()
     return pkt
 
 
@@ -68,14 +74,14 @@ def route(pkt):
     pkt = modify_packet(pkt)
     
     for subnet in routing_table.keys():
-        if ipaddress.ip_address(pkt[IP].dst) in ipaddress.ip_network(f"{subnet}.0/24"):
+        if ipaddress.ip_address(pkt[IP].dst) in ipaddress.ip_network(subnet):
             # get only ingoing packets
             if pkt.sniffed_on != routing_table[subnet]:
                 sendp(pkt, routing_table[subnet])
 
 
 def main():
-    sniff(iface=[IFACE_IN, IFACE_OUT], prn=route, filter="tcp or udp")
+    sniff(iface=[IFACE_IN, IFACE_OUT], prn=route, filter="ip and (tcp or udp)")
 
 
 if __name__ == "__main__":
