@@ -25,11 +25,6 @@ routing_table[SUBNET_OUT] = IFACE_OUT
 nat_table = {} # router's out port -> (client's ip, client's in port)
 
 
-routing_table = {} # subnet -> iface
-routing_table[SUBNET_IN] = IFACE_IN
-routing_table[SUBNET_OUT] = IFACE_OUT
-
-
 def generate_port() -> int:
     port = randrange(200, 10000)
     while port in nat_table.keys():
